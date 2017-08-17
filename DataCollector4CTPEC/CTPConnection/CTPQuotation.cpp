@@ -375,7 +375,6 @@ void CTPQuotation::FlushQuotation( CThostFtdcDepthMarketDataField* pQuotationDat
 	{	///< 更新日期+时间
 		::strcpy( tagStatus.Key, "mkstatus" );
 		tagStatus.MarketStatus = 1;
-		tagStatus.MarketDate = nSnapTradingDate;
 		tagStatus.MarketTime = nSnapUpdateTime;
 		QuoCollector::GetCollector()->OnData( 116, (char*)&tagStatus, sizeof(tagStatus), false );
 	}
