@@ -7,6 +7,7 @@
 
 
 T_MAP_RATE		CTPQuoImage::m_mapRate;
+T_MAP_KIND		CTPQuoImage::m_mapKind;
 
 
 CTPQuoImage::CTPQuoImage()
@@ -64,6 +65,7 @@ int CTPQuoImage::FreshCache()
 	QuotationSync::CTPSyncSaver::GetHandle().Init( sDumpFile.c_str(), DateTime::Now().DateToLong(), true );
 
 	m_mapRate.clear();												///< 清空放大倍数映射表
+	m_mapKind.clear();
 	m_pTraderApi->RegisterSpi( this );								///< 将this注册为事件处理的实例
 	if( false == Configuration::GetConfig().GetTrdConfList().RegisterServer( NULL, m_pTraderApi ) )///< 注册CTP链接需要的网络配置
 	{
@@ -101,45 +103,42 @@ void CTPQuoImage::BuildBasicData()
 	tagMkInfo.MarketID = Configuration::GetConfig().GetMarketID();
 	tagMkInfo.MarketDate = DateTime::Now().DateToLong();
 
-	tagMkInfo.PeriodsCount = 4;					///< 交易时段信息设置
-	tagMkInfo.MarketPeriods[0][0] = 21*60;		///< 第一段，取夜盘的时段的最大范围
-	tagMkInfo.MarketPeriods[0][1] = 23*60+30;
-	tagMkInfo.MarketPeriods[1][0] = 9*60;		///< 第二段
-	tagMkInfo.MarketPeriods[1][1] = 10*60+15;
-	tagMkInfo.MarketPeriods[2][0] = 10*60+30;	///< 第三段
-	tagMkInfo.MarketPeriods[2][1] = 11*60+30;
-	tagMkInfo.MarketPeriods[3][0] = 13*60+30;	///< 第四段
-	tagMkInfo.MarketPeriods[3][1] = 15*60;
-
 	///< 配置分类信息
-	tagMkInfo.KindCount = 4;
+	for( T_MAP_BASEDATA::iterator it = m_mapBasicData.begin(); it != m_mapBasicData.end(); it++ )
 	{
-		tagECFutureKindDetail_LF122		tagKind = { 0 };
+		CThostFtdcInstrumentField&			refData = it->second;
+		std::string							sCodeKey( refData.UnderlyingInstrID );
 
-		::strncpy( tagKind.KindName, "指数保留", 8 );
-		tagKind.PriceRate = 0;
-		tagKind.LotFactor = 0;
-		m_mapRate[m_mapRate.size()] = tagKind.PriceRate;
-		QuoCollector::GetCollector()->OnImage( 122, (char*)&tagKind, sizeof(tagKind), true );
-	}
-	{
-		tagECFutureKindDetail_LF122		tagKind = { 0 };
+		if( m_mapKind.find( sCodeKey ) == m_mapKind.end() )
+		{
+			tagECFutureKindDetail_LF122&	refKind = m_mapKind[sCodeKey];
 
-		::strncpy( tagKind.KindName, "能源期指", 8 );
-		tagKind.PriceRate = 2;
-		tagKind.LotFactor = 100;
-		m_mapRate[m_mapRate.size()] = tagKind.PriceRate;
-		QuoCollector::GetCollector()->OnImage( 122, (char*)&tagKind, sizeof(tagKind), true );
-	}
-	{
-		tagECFutureKindDetail_LF122		tagKind = { 0 };
+			::memset( &refKind, 0, sizeof(refKind) );
+			::sprintf( refKind.Key, "%u", m_mapKind.size()-1 );
+			::strcpy( refKind.KindName, refData.UnderlyingInstrID );
+			::strcpy( refKind.UnderlyingCode, refData.UnderlyingInstrID );
+			refKind.PriceRate = 2;
+			refKind.LotSize = 1;
+			refKind.LotFactor = 100;
+			refKind.PriceTick = refData.PriceTick * ::pow( (double)10, (int)refKind.PriceRate );
+			refKind.ContractMult = refData.VolumeMultiple;
+			refKind.DerivativeType = (THOST_FTDC_CP_CallOptions==refData.OptionsType) ? 0 : 1;
+			refKind.PeriodsCount = 4;
+			refKind.MarketPeriods[0][0] = 21*60;			///< 第一段，取夜盘的时段的最大范围
+			refKind.MarketPeriods[0][1] = 23*60+30;
+			refKind.MarketPeriods[1][0] = 9*60;				///< 第二段
+			refKind.MarketPeriods[1][1] = 10*60+15;
+			refKind.MarketPeriods[2][0] = 10*60+30;			///< 第三段
+			refKind.MarketPeriods[2][1] = 11*60+30;
+			refKind.MarketPeriods[3][0] = 13*60+30;			///< 第四段
+			refKind.MarketPeriods[3][1] = 15*60;
 
-		::strncpy( tagKind.KindName, "能源合约", 8 );
-		tagKind.PriceRate = 2;
-		tagKind.LotFactor = 100;
-		m_mapRate[m_mapRate.size()] = tagKind.PriceRate;
-		QuoCollector::GetCollector()->OnImage( 122, (char*)&tagKind, sizeof(tagKind), true );
+			m_mapRate[::atoi(refKind.Key)] = refKind.PriceRate;
+			QuoCollector::GetCollector()->OnImage( 122, (char*)&refKind, sizeof(tagECFutureKindDetail_LF122), true );
+		}
 	}
+
+	tagMkInfo.KindCount = m_mapKind.size();
 
 	::strcpy( tagStatus.Key, "mkstatus" );
 	tagStatus.MarketStatus = 0;
@@ -291,33 +290,31 @@ void CTPQuoImage::OnRspQryInstrument( CThostFtdcInstrumentField *pInstrument, CT
 			::memcpy( tagSnapLF.Code, refSnap.InstrumentID, sizeof(tagSnapLF.Code) );	///< 商品代码
 			::memcpy( tagSnapBS.Code, refSnap.InstrumentID, sizeof(tagSnapBS.Code) );	///< 商品代码
 
-			tagName.Kind = 2;
-			tagName.DerivativeType = 0;
-			tagName.DeliveryDate = ::atol(refSnap.StartDelivDate);						///< 交割日(YYYYMMDD)
-			tagName.StartDate = ::atol(refSnap.OpenDate);								///< 首个交易日(YYYYMMDD)
-			tagName.EndDate = ::atol(refSnap.ExpireDate);								///< 最后交易日(YYYYMMDD), 即 到期日
-			tagName.ExpireDate = tagName.EndDate;										///< 到期日(YYYYMMDD)
-			tagName.ContractMult = refSnap.VolumeMultiple;
-			::strncpy( tagName.Name, refSnap.InstrumentName, sizeof(tagName.Code) );	///< 商品名称
-
-			if( 3 == tagName.Kind )
+			T_MAP_KIND::iterator it = m_mapKind.find( refSnap.UnderlyingInstrID );
+			if( it != m_mapKind.end() )
 			{
-				tagName.LotSize = 1;													///< 手比率，期权为1张
-				::memcpy( tagName.UnderlyingCode, refSnap.UnderlyingInstrID, sizeof(tagName.UnderlyingCode) );///< 标的代码
-				tagName.XqPrice = refSnap.StrikePrice*GetRate(tagName.Kind)+0.5;		///< 行权价格(精确到厘) //[*放大倍数] 
+				tagName.Kind = ::atoi( it->second.Key );
+				tagName.DeliveryDate = ::atol(refSnap.StartDelivDate);						///< 交割日(YYYYMMDD)
+				tagName.StartDate = ::atol(refSnap.OpenDate);								///< 首个交易日(YYYYMMDD)
+				tagName.EndDate = ::atol(refSnap.ExpireDate);								///< 最后交易日(YYYYMMDD), 即 到期日
+				tagName.ExpireDate = tagName.EndDate;										///< 到期日(YYYYMMDD)
+				::strncpy( tagName.Name, refSnap.InstrumentName, sizeof(tagName.Code) );	///< 商品名称
+
+				if( 3 == tagName.Kind )
+				{
+					tagName.XqPrice = refSnap.StrikePrice*GetRate(tagName.Kind)+0.5;		///< 行权价格(精确到厘) //[*放大倍数] 
+				}
+
+				m_mapBasicData[std::string(pInstrument->InstrumentID)] = *pInstrument;
+				QuoCollector::GetCollector()->OnImage( 124, (char*)&tagName, sizeof(tagName), bIsLast );
+				QuoCollector::GetCollector()->OnImage( 125, (char*)&tagSnapLF, sizeof(tagSnapLF), bIsLast );
+				QuoCollector::GetCollector()->OnImage( 126, (char*)&tagSnapHF, sizeof(tagSnapHF), bIsLast );
+				QuoCollector::GetCollector()->OnImage( 127, (char*)&tagSnapBS, sizeof(tagSnapBS), bIsLast );
 			}
-			else if( 2 == tagName.Kind )
+			else
 			{
-				tagName.LotSize = 1;													///< 手比率
+				QuoCollector::GetCollector()->OnLog( TLV_WARN, "CTPQuoImage::OnRspQryInstrument() : ignore invalid kind index, code=%s, underlyingcode=%s", refSnap.InstrumentID, refSnap.UnderlyingInstrID );
 			}
-
-			tagName.PriceTick = refSnap.PriceTick*m_mapRate[tagName.Kind]+0.5;							///< 行权价格(精确到厘) //[*放大倍数] 
-
-			m_mapBasicData[std::string(pInstrument->InstrumentID)] = *pInstrument;
-			QuoCollector::GetCollector()->OnImage( 124, (char*)&tagName, sizeof(tagName), bIsLast );
-			QuoCollector::GetCollector()->OnImage( 125, (char*)&tagSnapLF, sizeof(tagSnapLF), bIsLast );
-			QuoCollector::GetCollector()->OnImage( 126, (char*)&tagSnapHF, sizeof(tagSnapHF), bIsLast );
-			QuoCollector::GetCollector()->OnImage( 127, (char*)&tagSnapBS, sizeof(tagSnapBS), bIsLast );
 		}
 	}
 
