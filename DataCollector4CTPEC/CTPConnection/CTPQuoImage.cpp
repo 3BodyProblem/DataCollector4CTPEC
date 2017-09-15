@@ -98,7 +98,6 @@ void CTPQuoImage::BuildBasicData()
 	tagECFutureMarketInfo_LF121		tagMkInfo = { 0 };
 	tagECFutureMarketStatus_HF123	tagStatus = { 0 };
 
-	::strcpy( tagMkInfo.Key, "mkinfo" );
 	tagMkInfo.WareCount = m_mapBasicData.size();
 	tagMkInfo.MarketID = Configuration::GetConfig().GetMarketID();
 	tagMkInfo.MarketDate = DateTime::Now().DateToLong();
@@ -139,8 +138,6 @@ void CTPQuoImage::BuildBasicData()
 	}
 
 	tagMkInfo.KindCount = m_mapKind.size();
-
-	::strcpy( tagStatus.Key, "mkstatus" );
 	tagStatus.MarketStatus = 0;
 	tagStatus.MarketTime = DateTime::Now().TimeToLong();
 
