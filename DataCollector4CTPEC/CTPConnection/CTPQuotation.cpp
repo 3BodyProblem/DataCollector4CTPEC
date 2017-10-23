@@ -375,12 +375,12 @@ void CTPQuotation::FlushQuotation( CThostFtdcDepthMarketDataField* pQuotationDat
 	{	///< 更新日期+时间
 		tagStatus.MarketStatus = 1;
 		tagStatus.MarketTime = nSnapUpdateTime;
-		QuoCollector::GetCollector()->OnData( 116, (char*)&tagStatus, sizeof(tagStatus), false );
+		QuoCollector::GetCollector()->OnData( 116, (char*)&tagStatus, sizeof(tagStatus), true );
 	}
 
-	QuoCollector::GetCollector()->OnData( 125, (char*)&tagSnapLF, sizeof(tagSnapLF), false );
-	QuoCollector::GetCollector()->OnData( 126, (char*)&tagSnapHF, sizeof(tagSnapHF), false );
-	QuoCollector::GetCollector()->OnData( 127, (char*)&tagSnapBS, sizeof(tagSnapBS), false );
+	QuoCollector::GetCollector()->OnData( 125, (char*)&tagSnapLF, sizeof(tagSnapLF), true );
+	QuoCollector::GetCollector()->OnData( 126, (char*)&tagSnapHF, sizeof(tagSnapHF), true );
+	QuoCollector::GetCollector()->OnData( 127, (char*)&tagSnapBS, sizeof(tagSnapBS), true );
 }
 
 void CTPQuotation::OnRspError( CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast )
